@@ -78,6 +78,7 @@ export class LoginComponent {
     const credential: Credential = {
       email,
       password,
+      isPremium: false,
     };
 
     try {
@@ -86,10 +87,10 @@ export class LoginComponent {
       } else {
         await this.authService.logInWithEmailAndPassword(credential);
         this.goToDashboard();
+        console.log('IsPremium: ', this.authService.getIsPremium());
       }
     } catch (error) {
       console.log(error);
-
       this.ToastifyService.showToast('Email o contraseña invalidos');
     }
   }

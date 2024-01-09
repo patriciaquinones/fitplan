@@ -2,8 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import { ToastifyService } from './toastify.service';
 import {
   getFirestore,
-  collection,
-  addDoc,
   setDoc,
   doc,
   getDoc,
@@ -21,10 +19,20 @@ import {
   signInWithPopup,
 } from '@angular/fire/auth';
 
+import { browserSessionPersistence, setPersistence } from 'firebase/auth';
+import { BehaviorSubject } from 'rxjs';
+
 export interface Credential {
   email: string;
   password: string;
   firstName?: string;
+  isPremium: boolean;
+}
+
+interface UserData {
+  email: string;
+  firstName?: string;
+  isPremium: boolean;
 }
 
 @Injectable({
@@ -32,13 +40,54 @@ export interface Credential {
 })
 export class AuthService {
   private auth: Auth = inject(Auth);
+  private userData: any;
   readonly authState$ = authState(this.auth);
+  private readonly USER_DATA_KEY = 'userData';
 
-  constructor(private ToastifyService: ToastifyService) {}
+  // To notify other components when the user's authentication state changes
+  private authenticationChanged = new BehaviorSubject<boolean>(false);
+
+  // to subscribe to changes in the user's authentication state
+  authenticationChanged$ = this.authenticationChanged.asObservable();
+
+  constructor(private ToastifyService: ToastifyService, auth: Auth) {
+    this.auth = auth;
+
+    // Configure session persistence
+    setPersistence(this.auth, browserSessionPersistence)
+      .then(() => {})
+      .catch((error) => {});
+
+    // Listen for changes to the user's authentication state
+    this.authState$.subscribe((user) => {
+      if (user) {
+        this.getUserId();
+        // notify changes in the authentication state
+        this.authenticationChanged.next(true);
+      } else {
+        this.authenticationChanged.next(false);
+      }
+    });
+  }
+
+  isAuthenticated(): boolean {
+    // use the observable to check if the user is authenticated
+    const user: User | null = this.auth.currentUser;
+    return user ? true : false;
+  }
 
   getUserId(): string | null {
     const user: User | null = this.auth.currentUser;
     return user ? user.uid : null;
+  }
+
+  async getUserName(): Promise<string | null> {
+    const userId = this.getUserId();
+    if (userId) {
+      const userData = await this.getUserData(userId);
+      return userData?.firstName || null;
+    }
+    return null;
   }
 
   async signUpWithEmailAndPassword(
@@ -50,6 +99,7 @@ export class AuthService {
         credential.email,
         credential.password
       );
+
       // Get Firestore instance
       const db = getFirestore();
       const uid = result.user.uid;
@@ -58,6 +108,7 @@ export class AuthService {
       await setDoc(doc(db, 'newuser', uid), {
         email: result.user.email,
         firstName: credential.firstName,
+        isPremium: false,
       });
       return result;
     } catch (error: any) {
@@ -72,7 +123,11 @@ export class AuthService {
       credential.password
     );
   }
+
   logOut(): Promise<void> {
+    this.ToastifyService.showToast('Sesión cerrada. Hasta luego!👋');
+    // Clear the user data from the service when the user logs out
+    this.userData = null;
     return this.auth.signOut();
   }
 
@@ -97,6 +152,7 @@ export class AuthService {
           uid: result.user.uid,
           email: result.user.email,
           firstName: result.user.displayName,
+          isPremium: false,
         });
       }
 
@@ -107,14 +163,25 @@ export class AuthService {
   }
 
   async getUserData(uid: string): Promise<any> {
-    const db = getFirestore();
-    const docRef = doc(db, 'newuser', uid);
-    const docSnap = await getDoc(docRef);
+    try {
+      const db = getFirestore();
+      const docRef = doc(db, 'newuser', uid);
+      const docSnap = await getDoc(docRef);
 
-    if (docSnap.exists()) {
-      return docSnap.data();
-    } else {
-      return null;
+      if (docSnap.exists()) {
+        const userData = docSnap.data();
+        this.userData = userData;
+        return userData;
+      } else {
+        return null;
+      }
+    } catch (error: any) {
+      if (error.code === 'permission-denied') {
+        this.ToastifyService.showToast('Ocurrio un error inesperado.');
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return this.getUserData(uid);
+      }
     }
   }
 
@@ -133,4 +200,33 @@ export class AuthService {
       console.error('User document does not exist.');
     }
   }
+
+  // when a user subscribes to a premium plan
+  async upgradeToPremium(uid: string): Promise<void> {
+    const db = getFirestore();
+    const userRef = doc(db, 'newuser', uid);
+
+    // Update the user's profile to mark them as a premium user
+    await updateDoc(userRef, { isPremium: true });
+  }
+
+  // this function is called when a user unsubscribes from a premium plan
+  async downgradeFromPremium(uid: string): Promise<void> {
+    const db = getFirestore();
+    const userRef = doc(db, 'newuser', uid);
+
+    // Update the user's profile to mark them as a non-premium user
+    await updateDoc(userRef, { isPremium: false });
+  }
+
+  // this function is called when a user logs in and we need to check if they are premium
+  async getIsPremium(): Promise<boolean> {
+    const userId = this.getUserId();
+    if (userId) {
+      const userData = await this.getUserData(userId);
+      return userData?.isPremium || false;
+    }
+    return false;
+  }
 }
+
