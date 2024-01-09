@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { SidebarService } from '../sidebar.service';
 import { CommonModule } from '@angular/common';
 import { SidebarComponent } from '../sidebar/sidebar.component';
-import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-navbar',
@@ -14,15 +13,11 @@ import { Router } from '@angular/router';
 export class NavbarComponent {
   navbarItems: { link: string; iconPath: string; label: string; }[];
 
-  constructor(private SidebarService: SidebarService, private router: Router) {
+  constructor(private SidebarService: SidebarService) {
     this.navbarItems = SidebarService.getNavbarItems();
   }
 
   toggleSidebar() {
     this.SidebarService.toggleSidebar();
-  }
-
-  goToHome() {
-    this.router.navigate(['/']);
   }
 }

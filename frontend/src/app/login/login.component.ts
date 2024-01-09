@@ -7,6 +7,8 @@ import { inject } from '@angular/core';
 import { ButtonProviders } from '../providers/button-providers.component';
 import { ToastifyService } from '../services/toastify.service';
 
+
+
 import {
   FormBuilder,
   FormControl,
@@ -18,7 +20,6 @@ import {
 interface LogInForm {
   email: FormControl<string>;
   password: FormControl<string>;
-  isPremium?: FormControl<boolean>;
 }
 
 @Component({
@@ -77,7 +78,6 @@ export class LoginComponent {
     const credential: Credential = {
       email,
       password,
-      isPremium: false,
     };
 
     try {
@@ -86,10 +86,10 @@ export class LoginComponent {
       } else {
         await this.authService.logInWithEmailAndPassword(credential);
         this.goToDashboard();
-        console.log('IsPremium: ', this.authService.getIsPremium());
       }
     } catch (error) {
       console.log(error);
+
       this.ToastifyService.showToast('Email o contraseña invalidos');
     }
   }

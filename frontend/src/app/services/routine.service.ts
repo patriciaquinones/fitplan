@@ -37,9 +37,7 @@ export class RoutineService {
   constructor(
     private toastifyService: ToastifyService,
     private authService: AuthService
-  ) {
-    this.init();
-  }
+  ) {    this.loadCountsFromFirestore();}
 
   private apiUrl = 'https://exercisedb.p.rapidapi.com/exercises';
   private headers = {
@@ -79,20 +77,7 @@ export class RoutineService {
     return this.fetchFromApi(`/exercise/${encodedId}`);
   }
 
-  private async init(): Promise<void> {
-    // listen for changes in the authentication state
-    this.authService.authState$.subscribe((user) => {
-      if (user) {
-        //if the user is authenticated, load the data from Firestore
-        this.loadCountsFromFirestore();
-        this.getLastAddedExercise();
-      } else {
-        //if the user is not authenticated, clear the data
-        this.clearUserProgressData();
-      }
-    });
-  }
-
+// add couting methods from firestone
   private async loadCountsFromFirestore(): Promise<void> {
     try {
       const userId = this.authService.getUserId();
@@ -106,12 +91,8 @@ export class RoutineService {
         if (docSnapshot.exists()) {
           const data = docSnapshot.data();
 
-          this.completedExercisesCountSubject.next(
-            data['completedExercisesCount'] || 0
-          );
-          this.completedRoutinesCountSubject.next(
-            data['completedRoutinesCount'] || 0
-          );
+          this.completedExercisesCountSubject.next(data['completedExercisesCount'] || 0);
+          this.completedRoutinesCountSubject.next(data['completedRoutinesCount'] || 0);
           this.accumulatedMinutesSubject.next(data['accumulatedMinutes'] || 0);
         }
       }
@@ -139,12 +120,6 @@ export class RoutineService {
     }
   }
 
-  private clearUserProgressData(): void {
-    this.completedExercisesCountSubject.next(0);
-    this.completedRoutinesCountSubject.next(0);
-    this.accumulatedMinutesSubject.next(0);
-  }
-
   async addExerciseToRoutine(exercise: any, userId: string): Promise<void> {
     try {
       const exerciseWithTimestamp = {
@@ -166,17 +141,12 @@ export class RoutineService {
       // Update counts and show toast
       this.completedExercisesCount++;
 
-      if (
-        this.completedExercisesCount % this.exercisesPerRoutineThreshold ===
-        0
-      ) {
+      if (this.completedExercisesCount % this.exercisesPerRoutineThreshold === 0) {
         await this.completeRoutine(userId); // Create a new routine document
         this.toastifyService.showToast('¡Rutina completada! 🎉');
         this.completedExercisesCount = 0;
       } else {
-        this.toastifyService.showToast(
-          'Se agregó el ejercicio a tu rutina. 🔥'
-        );
+        this.toastifyService.showToast('Se agregó el ejercicio a tu rutina. 🔥');
       }
 
       // Save counts to Firestore
@@ -218,8 +188,8 @@ export class RoutineService {
   }
 
   finishExercise() {
-    // Increment the completed exercises count
-    this.completedExercisesCountSubject.next(
+     // Increment the completed exercises count
+     this.completedExercisesCountSubject.next(
       this.completedExercisesCountSubject.value + 1
     );
     this.toastifyService.showToast('¡Ejercicio completado! 🎉');
@@ -279,14 +249,21 @@ export class RoutineService {
         if (!querySnapshot.empty) {
           // get the last exercise added to the routine
           const lastExercise = querySnapshot.docs[0].data();
+          console.log('lastExercise:', lastExercise);
+          console.log('usuario', userId);
           return lastExercise;
         } else {
+          console.log('No se encontraron ejercicios para el usuario:', userId);
+          console.error('Error en getLastAddedExercise:');
           return null;
         }
       } else {
+        console.log('No hay un usuario autenticado.');
         return null;
       }
     } catch (error) {
+      console.error(error);
+      console.error('Error en getLastAddedExercise:', error);
       throw error;
     }
   }
