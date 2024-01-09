@@ -19,6 +19,7 @@ interface SignUpForm {
   firstName: FormControl<string>;
   email: FormControl<string>;
   password: FormControl<string>;
+  isPremium?: FormControl<boolean>;
 }
 
 @Component({
